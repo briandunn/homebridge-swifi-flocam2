@@ -1,0 +1,37 @@
+{
+  "pluginAlias": "SwifiFlocam2",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "devices": {
+        "type": "array",
+        "items": {
+          "description": "floodlight",
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "required": true,
+              "default": "floodlight"
+            },
+            "host": {
+              "title": "Host",
+              "type": "string",
+              "default": "an IP or host name for the floodlight",
+              "required": true
+            },
+            "port": {
+              "title": "Port",
+              "type": "integer",
+              "default": 85,
+              "required": true
+            }
+          }
+        }
+      }
+    }
+  }
+}
