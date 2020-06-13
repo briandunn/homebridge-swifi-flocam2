@@ -2,7 +2,7 @@
   "public": true,
   "displayName": "Swann Floodlight",
   "name": "@briandunn/homebridge-swifi-flocam2",
-  "version": "1.0.0",
+  "version": "1.0.1-beta.0",
   "description": "A light accessory for the Swann floodlight",
   "license": "Apache-2.0",
   "repository": {
