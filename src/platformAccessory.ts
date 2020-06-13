@@ -11,7 +11,8 @@ import * as http from 'http';
 import { FloodlightPlatform } from './platform';
 
 interface MediaConfig {
-  Light: number;
+  Light?: number;
+  'Light Intensity'?: number;
 }
 
 /**
@@ -21,15 +22,7 @@ interface MediaConfig {
  */
 export class FloodlightAccessory {
   private service: Service;
-
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
-  private exampleStates = {
-    On: false,
-    Brightness: 100,
-  };
+  private mediaConfig: MediaConfig | undefined;
 
   constructor(
     private readonly platform: FloodlightPlatform,
@@ -62,7 +55,7 @@ export class FloodlightAccessory {
     // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
     this.service.setCharacteristic(
       this.platform.Characteristic.Name,
-      accessory.context.device.exampleDisplayName
+      accessory.context.device.name
     );
 
     // each service must implement at-minimum the "required characteristics" for the given service type
@@ -77,29 +70,25 @@ export class FloodlightAccessory {
     // register handlers for the Brightness Characteristic
     this.service
       .getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this)); // SET - bind to the 'setBrightness` method below
+      .on('set', this.setBrightness.bind(this)) // SET - bind to the 'setBrightness` method below
+      .on('get', this.getBrightness.bind(this)); // SET - bind to the 'setBrightness` method below
 
-    // EXAMPLE ONLY
-    // Example showing how to update the state of a Characteristic asynchronously instead
-    // of using the `on('get')` handlers.
-    //
-    // Here we change update the brightness to a random value every 5 seconds using
-    // the `updateCharacteristic` method.
-    setInterval(() => {
-      // assign the current brightness a random value between 0 and 100
-      const currentBrightness = Math.floor(Math.random() * 100);
+    this.getMediaConfig()
+      .then((mediaConfig) => {
+        this.mediaConfig = mediaConfig;
+        this.service.updateCharacteristic(
+          this.platform.Characteristic.On,
+          mediaConfig.Light === 1
+        );
 
-      // push the new value to HomeKit
-      this.service.updateCharacteristic(
-        this.platform.Characteristic.Brightness,
-        currentBrightness
-      );
-
-      this.platform.log.debug(
-        'Pushed updated current Brightness state to HomeKit:',
-        currentBrightness
-      );
-    }, 10000);
+        this.service.updateCharacteristic(
+          this.platform.Characteristic.Brightness,
+          mediaConfig['Light Intensity'] || 0
+        );
+      })
+      .catch((e) => {
+        this.platform.log.error('Error ->', e);
+      });
   }
 
   /**
@@ -107,21 +96,14 @@ export class FloodlightAccessory {
    * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
    */
   setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-    this.exampleStates.On = value as boolean;
     const { log } = this.platform;
-    log.debug('Set Characteristic On ->', value);
+    log.debug('Setting Characteristic On ->', value);
     const body = { Light: value ? 1 : 0 };
-    this.request(
-      {
-        path: '/API10/setMediaConfig',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      },
-      body
-    )
-      .then(() => callback(null))
+    this.setMediaConfig(body)
+      .then(() => {
+        log.debug('Set Characteristic On ->', value);
+        callback(null);
+      })
       .catch(callback);
   }
 
@@ -139,14 +121,76 @@ export class FloodlightAccessory {
    * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
    */
   getOn(callback: CharacteristicGetCallback) {
-    this.request<MediaConfig>({
-      path: '/API10/getMediaConfig',
-      method: 'GET',
-    })
+    this.getMediaConfig(1500)
       .then(({ Light }) => {
         callback(null, Light === 1);
       })
-      .catch(callback);
+      .catch((e) => {
+        this.platform.log.error(e);
+        callback(e);
+      });
+  }
+
+  getBrightness(callback: CharacteristicGetCallback) {
+    this.getMediaConfig(1500)
+      .then(({ 'Light Intensity': intensity }) => {
+        callback(null, intensity);
+      })
+      .catch((e) => {
+        this.platform.log.error(e);
+        callback(e);
+      });
+  }
+
+  getMediaConfig(timeout = 10 * 1000): Promise<MediaConfig> {
+    const { req, send } = this.request<MediaConfig>({
+      path: '/API10/getMediaConfig',
+      method: 'GET',
+    });
+
+    const defaults: MediaConfig = {
+      Light: 0,
+      'Light Intensity': 0,
+    };
+
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      req.setTimeout(timeout, () => {
+        this.platform.log.debug(
+          'timeout getting Media Config. Reusing last known value.'
+        );
+        if (!resolved) {
+          resolve(this.mediaConfig || defaults);
+          resolved = true;
+        }
+      });
+
+      return send()
+        .then((data) => {
+          this.mediaConfig = data;
+          if (!resolved) {
+            resolve(data);
+            resolved = true;
+          }
+        })
+        .catch(reject);
+    });
+  }
+
+  setMediaConfig(mediaConfig: MediaConfig) {
+    const { send, req } = this.request<MediaConfig>({
+      path: '/API10/setMediaConfig',
+      method: 'POST',
+    });
+    const body = JSON.stringify(mediaConfig);
+
+    req.setHeader('Content-Length', Buffer.byteLength(body));
+    req.write(body);
+
+    return send().then((data) => {
+      this.mediaConfig = data;
+      return data;
+    });
   }
 
   /**
@@ -158,57 +202,86 @@ export class FloodlightAccessory {
     callback: CharacteristicSetCallback
   ) {
     // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
+    // this.exampleStates.Brightness = value as number;
 
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
+    const { log } = this.platform;
+    log.debug('Setting Characteristic Brightness ->', value);
+    const body = { 'Light Intensity': value as number };
 
-    // you must call the callback function
-    callback(null);
+    this.setMediaConfig(body)
+      .then((mediaConfig) => {
+        log.debug('Set Characteristic Brightness ->', value);
+        this.mediaConfig = mediaConfig;
+        callback(null);
+      })
+      .catch(callback);
   }
 
   request<T>(
-    { headers, ...opts }: http.RequestOptions,
-    data: T | undefined = undefined
-  ): Promise<T> {
-    const body = JSON.stringify(data);
-    return new Promise((resolve, reject) => {
-      const { log } = this.platform;
-      const { host, port } = this.accessory.context.device;
-      const contentLength = body
-        ? { 'Content-Length': Buffer.byteLength(body) }
-        : {};
+    opts: http.RequestOptions
+  ): { req: http.ClientRequest; send: () => Promise<T> } {
+    const { log } = this.platform;
+    const { host, port } = this.accessory.context.device;
 
-      const req = http.request(
-        {
-          host,
-          port,
-          headers: { ...contentLength, ...headers },
-          ...opts,
-        },
-        (res) => {
+    const options = {
+      host,
+      port,
+      ...opts,
+    };
+
+    const req = http.request(options);
+
+    const send = () => {
+      let resolved = false;
+      const promise: Promise<T> = new Promise((resolve, reject) => {
+        let resBody = '';
+
+        const once = (fn) => {
+          if (!resolved) {
+            fn();
+            resolved = true;
+          }
+        };
+
+        const rejectOnce = (data) => {
+          once(() => {
+            reject(data);
+          });
+        };
+
+        const resolveOnce = (data) => {
+          once(() => {
+            resolve(data);
+          });
+        };
+
+        const onResponse = (res: http.IncomingMessage) => {
           log.debug('response status ->', res.statusCode);
           if (
             res.statusCode &&
             (res.statusCode < 200 || res.statusCode >= 400)
           ) {
-            reject(res.statusCode);
+            rejectOnce(res.statusCode);
           }
 
           res.setEncoding('utf8');
-          let resBody = '';
 
           res.on('data', (chunk) => {
             resBody += chunk;
           });
-
-          res.on('end', () => {
+          res.once('end', () => {
             const data = JSON.parse(resBody);
             log.debug('response body ->', data);
-            resolve(data);
+            resolveOnce(data);
           });
-        }
-      );
-      req.write(body);
-    });
+        };
+        req.once('response', onResponse);
+        req.once('error', rejectOnce);
+      });
+      log.debug('request ->', options);
+      req.end();
+      return promise;
+    };
+    return { send, req };
   }
 }
