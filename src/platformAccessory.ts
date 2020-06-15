@@ -6,13 +6,11 @@ import {
   CharacteristicGetCallback,
 } from 'homebridge';
 
-import FloodlightAPI, { Floodlight } from './api';
+import FloodlightAPI, { Floodlight, Device } from './api';
 import { FloodlightPlatform } from './platform';
 
 /**
- * Platform Accessory
- * An instance of this class is created for each accessory your platform registers
- * Each accessory may expose multiple services of different service types.
+ * Floodlight Accessory
  */
 export class FloodlightAccessory {
   private service: Service;
@@ -24,10 +22,12 @@ export class FloodlightAccessory {
   ) {
     const {
       platform: { log },
-      accessory: {
-        context: { host, port },
-      },
+      accessory: { context },
     } = this;
+    const {
+      device: { host, port },
+    } = context;
+    log.debug('context ->', context);
     this.api = new FloodlightAPI({ log, host, port });
 
     this.service =
@@ -39,20 +39,15 @@ export class FloodlightAccessory {
       accessory.context.device.name
     );
 
-    // each service must implement at-minimum the "required characteristics" for the given service type
-    // see https://developers.homebridge.io/#/service/Lightbulb
-
-    // register handlers for the On/Off Characteristic
     this.service
       .getCharacteristic(this.platform.Characteristic.On)
-      .on('set', this.setOn.bind(this)) // SET - bind to the `setOn` method below
-      .on('get', this.getOn.bind(this)); // GET - bind to the `getOn` method below
+      .on('set', this.setOn.bind(this))
+      .on('get', this.getOn.bind(this));
 
-    // register handlers for the Brightness Characteristic
     this.service
       .getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this)) // SET - bind to the 'setBrightness` method below
-      .on('get', this.getBrightness.bind(this)); // SET - bind to the 'setBrightness` method below
+      .on('set', this.setBrightness.bind(this))
+      .on('get', this.getBrightness.bind(this));
 
     this.api.getLight().then((light) => {
       Object.assign(this.accessory.context, light);
@@ -68,24 +63,30 @@ export class FloodlightAccessory {
       );
     });
 
-    this.api
-      .getDeviceInfo()
-      .then(({ manufacturer, model, serial }) => {
-        this.accessory
-          .getService(this.platform.Service.AccessoryInformation)!
-          .updateCharacteristic(
-            this.platform.Characteristic.Manufacturer,
-            manufacturer
-          )
-          .updateCharacteristic(this.platform.Characteristic.Model, model)
-          .updateCharacteristic(
-            this.platform.Characteristic.SerialNumber,
-            serial
-          );
-      })
-      .catch((e) => {
-        this.platform.log.error('Error ->', e);
-      });
+    if (context.manufacturer && context.model && context.serial) {
+      this.updateDeviceInfo(context as Device);
+    } else {
+      this.api
+        .getDeviceInfo()
+        .then((deviceInfo) => {
+          Object.assign(context, deviceInfo);
+          this.updateDeviceInfo(deviceInfo);
+        })
+        .catch((e) => {
+          log.error('Error ->', e);
+        });
+    }
+  }
+
+  updateDeviceInfo({ manufacturer, model, serial }) {
+    this.accessory
+      .getService(this.platform.Service.AccessoryInformation)!
+      .updateCharacteristic(
+        this.platform.Characteristic.Manufacturer,
+        manufacturer
+      )
+      .updateCharacteristic(this.platform.Characteristic.Model, model)
+      .updateCharacteristic(this.platform.Characteristic.SerialNumber, serial);
   }
 
   getOn(callback: CharacteristicGetCallback) {

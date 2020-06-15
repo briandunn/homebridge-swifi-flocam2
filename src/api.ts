@@ -2,13 +2,51 @@ import * as http from 'http';
 import { Logger } from 'homebridge';
 
 interface MediaConfig {
-  Light: number;
-  'Light Intensity': number;
+  'Image Flip': 0;
+  'Image Mirror': 0;
+  Light: 0;
+  'Light Intensity': 3;
+  'Light On Motion Duration': 60;
+  'Light On Motion': 1;
+  'Live Video Quality': 1;
+  'Mic Volume': 100;
+  Siren: 0;
+  'Siren On Motion Duration': 60;
+  'Siren On Motion': 0;
+  'Speaker Volume': 100;
+  'Video Environment Mode': 2;
+  'Video Environment': 50;
+}
+interface DeviceInfo {
+  'Current Agent': string;
+  'Current FW': string;
+  'Device Type': number;
+  Factory: string;
+  'Factory Region': string;
+  Manufacturer: string;
+  Model: string;
+  'NIC IP': string;
+  'NIC MAC': string;
+  'Operating Mode': number;
+  'P2P Id': string;
+  'Production Agent': string;
+  'Production FW': string;
+  Serial: string;
+  'WiFi IP': string;
+  'WiFi MAC': string;
+  'WiFi SSID': string;
+  'WiFi Signal': number;
 }
 
 export interface Floodlight {
   on: boolean;
   brightness: number;
+}
+
+export interface Device {
+  manufacturer: string;
+  serial: string;
+  model: string;
 }
 
 const mediaConfigToLight = (data) => ({
@@ -32,7 +70,7 @@ export default class API {
     this.host = host;
   }
 
-  getLight({ timeout = 10 * 1000 } = {}): Promise<Floodlight> {
+  async getLight({ timeout = 10 * 1000 } = {}): Promise<Floodlight> {
     const { req, send } = this.request<MediaConfig>({
       path: '/API10/getMediaConfig',
       method: 'GET',
@@ -52,7 +90,7 @@ export default class API {
     });
   }
 
-  setLight(light: Floodlight) {
+  async setLight(light: Floodlight) {
     const { send, req } = this.request<MediaConfig>({
       path: '/API10/setMediaConfig',
       method: 'POST',
@@ -64,12 +102,17 @@ export default class API {
     return send().then((data) => mediaConfigToLight(data));
   }
 
-  getDeviceInfo() {
-    return Promise.resolve({
-      manufacturer: 'default',
-      model: 'default',
-      serial: 'default',
-    });
+  async getDeviceInfo(): Promise<Device> {
+    return this.request<DeviceInfo>({
+      method: 'GET',
+      path: '/API10/getDeviceInfo',
+    })
+      .send()
+      .then((info) => ({
+        manufacturer: info.Manufacturer,
+        model: info.Model,
+        serial: info.Serial,
+      }));
   }
 
   request<T>(
@@ -85,7 +128,7 @@ export default class API {
 
     const req = http.request(options);
 
-    const send = () => {
+    const send = async () => {
       let rejected = false;
 
       const promise: Promise<T> = new Promise((resolve, reject) => {
