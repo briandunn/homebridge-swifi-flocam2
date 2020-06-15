@@ -98,11 +98,11 @@ export class FloodlightAccessory {
   }
 
   setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-    this.setLight({ on: value as boolean })
-      .then(() => {
-        callback(null);
-      })
-      .catch(callback);
+    return this.handleSet(
+      this.api.setLightOn(value as boolean),
+      'on',
+      callback
+    );
   }
 
   getBrightness(callback: CharacteristicGetCallback) {
@@ -117,11 +117,11 @@ export class FloodlightAccessory {
     value: CharacteristicValue,
     callback: CharacteristicSetCallback
   ) {
-    this.setLight(value as number)
-      .then(() => {
-        callback(null);
-      })
-      .catch(callback);
+    return this.handleSet(
+      this.api.setLightBrightness(value as number),
+      'brightness',
+      callback
+    );
   }
 
   getLight({ timeout }): Promise<Floodlight> {
@@ -146,10 +146,16 @@ export class FloodlightAccessory {
     });
   }
 
-  setLight(light) {
-    return this.api.setLight(light).then((light) => {
-      Object.assign(this.accessory.context, light);
-      return light;
-    });
+  async handleSet(
+    lightPromise: Promise<number | boolean>,
+    attr: keyof Floodlight,
+    callback: CharacteristicSetCallback
+  ) {
+    return lightPromise
+      .then((val) => {
+        this.accessory.context[attr] = val;
+        callback(null);
+      })
+      .catch(callback);
   }
 }

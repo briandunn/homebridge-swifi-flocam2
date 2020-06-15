@@ -2,20 +2,20 @@ import * as http from 'http';
 import { Logger } from 'homebridge';
 
 interface MediaConfig {
-  'Image Flip': 0;
-  'Image Mirror': 0;
-  Light: 0;
-  'Light Intensity': 3;
-  'Light On Motion Duration': 60;
-  'Light On Motion': 1;
-  'Live Video Quality': 1;
-  'Mic Volume': 100;
-  Siren: 0;
-  'Siren On Motion Duration': 60;
-  'Siren On Motion': 0;
-  'Speaker Volume': 100;
-  'Video Environment Mode': 2;
-  'Video Environment': 50;
+  'Image Flip': 0 | 1;
+  'Image Mirror': 0 | 1;
+  Light: 0 | 1;
+  'Light Intensity': number;
+  'Light On Motion Duration': number;
+  'Light On Motion': 0 | 1;
+  'Live Video Quality': number;
+  'Mic Volume': number;
+  Siren: 0 | 1;
+  'Siren On Motion Duration': number;
+  'Siren On Motion': 0 | 1;
+  'Speaker Volume': number;
+  'Video Environment Mode': number;
+  'Video Environment': number;
 }
 interface DeviceInfo {
   'Current Agent': string;
@@ -38,10 +38,15 @@ interface DeviceInfo {
   'WiFi Signal': number;
 }
 
-export interface Floodlight {
+interface On {
   on: boolean;
+}
+
+interface Brightness {
   brightness: number;
 }
+
+export type Floodlight = Brightness & On;
 
 export interface Device {
   manufacturer: string;
@@ -54,10 +59,9 @@ const mediaConfigToLight = (data) => ({
   brightness: data['Light Intensity'],
 });
 
-const lightToMediaConfig = (light) => ({
-  Light: light.on ? 1 : 0,
-  'Light Intensity': light.brightness,
-});
+type MediaConfigSlice = {
+  [key in keyof MediaConfig]?: MediaConfig[key];
+};
 
 export default class API {
   log: Logger;
@@ -90,16 +94,28 @@ export default class API {
     });
   }
 
-  async setLight(light: Floodlight) {
+  async postMediaConfigAttr(data: MediaConfigSlice): Promise<MediaConfigSlice> {
     const { send, req } = this.request<MediaConfig>({
       path: '/API10/setMediaConfig',
       method: 'POST',
     });
-    const body = JSON.stringify(lightToMediaConfig(light));
+    const body = JSON.stringify(data);
     req.setHeader('Content-Length', Buffer.byteLength(body));
     req.write(body);
 
-    return send().then((data) => mediaConfigToLight(data));
+    return send();
+  }
+
+  async setLightBrightness(brightness: number): Promise<number> {
+    return this.postMediaConfigAttr({ 'Light Intensity': brightness }).then(
+      ({ 'Light Intensity': newBrightness }) => newBrightness || brightness
+    );
+  }
+
+  async setLightOn(on: boolean): Promise<boolean> {
+    return this.postMediaConfigAttr({ Light: on ? 1 : 0 }).then(
+      ({ Light }) => Light === 1
+    );
   }
 
   async getDeviceInfo(): Promise<Device> {
