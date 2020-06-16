@@ -49,8 +49,28 @@ export class FloodlightAccessory {
       .on('set', this.setBrightness.bind(this))
       .on('get', this.getBrightness.bind(this));
 
-    this.api.getLight().then((light) => {
-      Object.assign(this.accessory.context, light);
+    this.initLight();
+
+    if (context.manufacturer && context.model && context.serial) {
+      this.updateDeviceInfo(context as Device);
+    } else {
+      this.getAndUpdateDeviceInfo();
+    }
+  }
+
+  async getAndUpdateDeviceInfo() {
+    try {
+      const deviceInfo = await this.api.getDeviceInfo();
+      Object.assign(this.accessory.context, deviceInfo);
+      this.updateDeviceInfo(deviceInfo);
+    } catch (e) {
+      this.platform.log.error('Cannot get device info ->', e);
+    }
+  }
+
+  async initLight() {
+    try {
+      const light = await this.getLight({ timeout: 10 * 1000 });
 
       this.service.updateCharacteristic(
         this.platform.Characteristic.On,
@@ -61,20 +81,8 @@ export class FloodlightAccessory {
         this.platform.Characteristic.Brightness,
         light.brightness
       );
-    });
-
-    if (context.manufacturer && context.model && context.serial) {
-      this.updateDeviceInfo(context as Device);
-    } else {
-      this.api
-        .getDeviceInfo()
-        .then((deviceInfo) => {
-          Object.assign(context, deviceInfo);
-          this.updateDeviceInfo(deviceInfo);
-        })
-        .catch((e) => {
-          log.error('Error ->', e);
-        });
+    } catch (e) {
+      this.platform.log.error('failed to initialize characteristics ->', e);
     }
   }
 
@@ -89,73 +97,62 @@ export class FloodlightAccessory {
       .updateCharacteristic(this.platform.Characteristic.SerialNumber, serial);
   }
 
-  getOn(callback: CharacteristicGetCallback) {
-    this.getLight({ timeout: 1000 })
-      .then(({ on }) => {
-        callback(null, on);
-      })
-      .catch(callback);
+  async getOn(callback: CharacteristicGetCallback) {
+    try {
+      const light = await this.getLight({ timeout: 1000 });
+      callback(null, light.on);
+    } catch (e) {
+      callback(e);
+    }
   }
 
-  setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-    return this.handleSet(
-      this.api.setLightOn(value as boolean),
-      'on',
-      callback
-    );
+  async setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+    try {
+      const on = await this.api.setLightOn(value as boolean);
+      this.accessory.context.on = on;
+      callback(null, on);
+      return on;
+    } catch (e) {
+      callback(e);
+    }
   }
 
-  getBrightness(callback: CharacteristicGetCallback) {
-    this.getLight({ timeout: 1000 })
-      .then(({ brightness }) => {
-        callback(null, brightness);
-      })
-      .catch(callback);
+  async getBrightness(callback: CharacteristicGetCallback) {
+    try {
+      const light = await this.getLight({ timeout: 1000 });
+      callback(null, light.brightness);
+    } catch (e) {
+      callback(e);
+    }
   }
 
-  setBrightness(
+  async setBrightness(
     value: CharacteristicValue,
     callback: CharacteristicSetCallback
   ) {
-    return this.handleSet(
-      this.api.setLightBrightness(value as number),
-      'brightness',
-      callback
-    );
+    try {
+      const brightness = await this.api.setLightBrightness(value as number);
+      this.accessory.context.brightness = brightness;
+      callback(null, brightness);
+      return brightness;
+    } catch (e) {
+      callback(e);
+    }
   }
 
-  getLight({ timeout }): Promise<Floodlight> {
-    return new Promise((resolve, reject) => {
-      this.api
-        .getLight({ timeout })
-        .catch((e) => {
-          if (e === 'timeout') {
-            return {
-              on: this.accessory.context.on || false,
-              brightness: this.accessory.context.brightness || 0,
-            };
-          } else {
-            reject(e);
-          }
-        })
-        .then((light) => {
-          Object.assign(this.accessory.context, light);
-          resolve(light);
-        })
-        .catch(reject);
-    });
-  }
-
-  async handleSet(
-    lightPromise: Promise<number | boolean>,
-    attr: keyof Floodlight,
-    callback: CharacteristicSetCallback
-  ) {
-    return lightPromise
-      .then((val) => {
-        this.accessory.context[attr] = val;
-        callback(null);
-      })
-      .catch(callback);
+  async getLight({ timeout }): Promise<Floodlight> {
+    try {
+      const light = this.api.getLight({ timeout });
+      Object.assign(this.accessory.context, light);
+      return light;
+    } catch (e) {
+      if (e === 'timeout') {
+        return {
+          on: this.accessory.context.on || false,
+          brightness: this.accessory.context.brightness || 0,
+        };
+      }
+      throw e;
+    }
   }
 }
