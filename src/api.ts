@@ -38,15 +38,10 @@ interface DeviceInfo {
   'WiFi Signal': number;
 }
 
-interface On {
+export interface Floodlight {
   on: boolean;
-}
-
-interface Brightness {
   brightness: number;
 }
-
-export type Floodlight = Brightness & On;
 
 export interface Device {
   manufacturer: string;
@@ -54,14 +49,7 @@ export interface Device {
   model: string;
 }
 
-const mediaConfigToLight = (data) => ({
-  on: data.Light === 1,
-  brightness: data['Light Intensity'],
-});
-
-type MediaConfigSlice = {
-  [key in keyof MediaConfig]?: MediaConfig[key];
-};
+type MediaConfigSlice = Partial<MediaConfig>;
 
 export default class API {
   log: Logger;
@@ -80,18 +68,16 @@ export default class API {
       method: 'GET',
     });
 
-    return new Promise((resolve, reject) => {
-      req.setTimeout(timeout, () => {
-        this.log.debug('timeout getting Media Config', timeout);
-        reject('timeout');
-      });
-
-      return send()
-        .then((data) => {
-          resolve(mediaConfigToLight(data));
-        })
-        .catch(reject);
+    req.setTimeout(timeout, () => {
+      this.log.debug('timeout getting Media Config', timeout);
+      throw 'timeout';
     });
+
+    const data = await send();
+    return {
+      on: data.Light === 1,
+      brightness: data['Light Intensity'],
+    };
   }
 
   async postMediaConfigAttr(data: MediaConfigSlice): Promise<MediaConfigSlice> {
@@ -107,28 +93,28 @@ export default class API {
   }
 
   async setLightBrightness(brightness: number): Promise<number> {
-    return this.postMediaConfigAttr({ 'Light Intensity': brightness }).then(
-      ({ 'Light Intensity': newBrightness }) => newBrightness || brightness
-    );
+    const {
+      'Light Intensity': newBrightness,
+    } = await this.postMediaConfigAttr({ 'Light Intensity': brightness });
+    return newBrightness || brightness;
   }
 
   async setLightOn(on: boolean): Promise<boolean> {
-    return this.postMediaConfigAttr({ Light: on ? 1 : 0 }).then(
-      ({ Light }) => Light === 1
-    );
+    const { Light } = await this.postMediaConfigAttr({ Light: on ? 1 : 0 });
+    return Light === 1;
   }
 
   async getDeviceInfo(): Promise<Device> {
-    return this.request<DeviceInfo>({
+    const info = await this.request<DeviceInfo>({
       method: 'GET',
       path: '/API10/getDeviceInfo',
-    })
-      .send()
-      .then((info) => ({
-        manufacturer: info.Manufacturer,
-        model: info.Model,
-        serial: info.Serial,
-      }));
+    }).send();
+
+    return {
+      manufacturer: info.Manufacturer,
+      model: info.Model,
+      serial: info.Serial,
+    };
   }
 
   request<T>(
