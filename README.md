@@ -34,12 +34,12 @@ Add this to the `platforms` list:
 
 I only have one of these, so I don't know if they always use port 85 for the HTTP server. If you're getting errors in the homebridge log, you can spy on the app to find out what port it's using.
 
-I used `rvictl` with wireshark on my mac. (These helpful instructions](https://github.com/AMoo-Miki/homebridge-tuya-lan/wiki/Common-Problems#want-to-help-debug-and-have-a-mac) should get you started.
+I used `rvictl` with wireshark on my mac. [These helpful instructions](https://github.com/AMoo-Miki/homebridge-tuya-lan/wiki/Common-Problems#want-to-help-debug-and-have-a-mac) should get you started.
 Once you're spying on phone traffic, filter to the IP of your camera. Play around with the app controls and see what happens. If you learn something please open an issue on this repo.
 
 ## Video Feed
 
-(Homebridge Camera FFmpeg)[https://www.npmjs.com/package/homebridge-camera-ffmpeg] works for the camera with the following config:
+[Homebridge Camera FFmpeg](https://www.npmjs.com/package/homebridge-camera-ffmpeg) works for the camera with the following config:
 
 ```json
 {
@@ -59,5 +59,5 @@ Once you're spying on phone traffic, filter to the IP of your camera. Play aroun
 
 ## TODO
 
-[] Poll (or subscribe?) to update light state when activated elsewhere (app or motion sensor)
-[] Discovery?
+- [ ] Poll (or subscribe?) to update light state when activated elsewhere (app or motion sensor)
+- [ ] Discovery?
