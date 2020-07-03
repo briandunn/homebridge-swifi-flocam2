@@ -49,13 +49,13 @@ export class FloodlightAccessory {
       .on('set', this.setBrightness.bind(this))
       .on('get', this.getBrightness.bind(this));
 
-    this.initLight();
-
     if (context.manufacturer && context.model && context.serial) {
       this.updateDeviceInfo(context as Device);
     } else {
       this.getAndUpdateDeviceInfo();
     }
+
+    this.refreshLight();
   }
 
   async getAndUpdateDeviceInfo() {
@@ -68,9 +68,11 @@ export class FloodlightAccessory {
     }
   }
 
-  async initLight() {
+  async refreshLight() {
+    const pollInterval = this.accessory.context.device.pollInterval || 3000;
+
     try {
-      const light = await this.getLight({ timeout: 10 * 1000 });
+      const light = await this.getLight({ timeout: pollInterval });
 
       this.service.updateCharacteristic(
         this.platform.Characteristic.On,
@@ -84,6 +86,8 @@ export class FloodlightAccessory {
     } catch (e) {
       this.platform.log.error('failed to initialize characteristics ->', e);
     }
+    this.platform.log.debug('scheduling refresh in ->', pollInterval);
+    setTimeout(this.refreshLight.bind(this), pollInterval);
   }
 
   updateDeviceInfo({ manufacturer, model, serial }) {
@@ -99,7 +103,7 @@ export class FloodlightAccessory {
 
   async getOn(callback: CharacteristicGetCallback) {
     try {
-      const light = await this.getLight({ timeout: 1000 });
+      const light = await this.getLight();
       callback(null, light.on);
     } catch (e) {
       callback(e);
@@ -119,7 +123,7 @@ export class FloodlightAccessory {
 
   async getBrightness(callback: CharacteristicGetCallback) {
     try {
-      const light = await this.getLight({ timeout: 1000 });
+      const light = await this.getLight();
       callback(null, light.brightness);
     } catch (e) {
       callback(e);
@@ -140,9 +144,10 @@ export class FloodlightAccessory {
     }
   }
 
-  async getLight({ timeout }): Promise<Floodlight> {
+  async getLight({ timeout } = { timeout: null }): Promise<Floodlight> {
+    const to = timeout || this.accessory.context.device.getLightTimeout || 300;
     try {
-      const light = this.api.getLight({ timeout });
+      const light = this.api.getLight({ timeout: to });
       Object.assign(this.accessory.context, light);
       return light;
     } catch (e) {

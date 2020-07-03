@@ -28,6 +28,19 @@
               "type": "integer",
               "default": 85,
               "required": true
+            },
+            "getLightTimeout": {
+              "title": "get light timeout",
+              "description": "time in ms to wait for the light to respond. (high values may cause unresponsiveness)",
+              "default": 300,
+              "required": false
+            },
+
+            "pollInterval": {
+              "title": "poll interval",
+              "description": "time to wait between checking the light status.",
+              "default": 3000,
+              "required": false
             }
           }
         }
