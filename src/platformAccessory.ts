@@ -84,7 +84,7 @@ export class FloodlightAccessory {
         light.brightness
       );
     } catch (e) {
-      this.platform.log.error('failed to initialize characteristics ->', e);
+      this.platform.log.error('failed to refresh characteristics ->', e);
     }
     this.platform.log.debug('scheduling refresh in ->', pollInterval);
     setTimeout(this.refreshLight.bind(this), pollInterval);
@@ -151,7 +151,7 @@ export class FloodlightAccessory {
       Object.assign(this.accessory.context, light);
       return light;
     } catch (e) {
-      if (e === 'timeout') {
+      if (e.code === 'ECONNRESET') {
         return {
           on: this.accessory.context.on || false,
           brightness: this.accessory.context.brightness || 0,

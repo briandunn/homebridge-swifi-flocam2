@@ -70,7 +70,7 @@ export default class API {
 
     req.setTimeout(timeout, () => {
       this.log.debug('timeout getting Media Config', timeout);
-      throw 'timeout';
+      req.destroy();
     });
 
     const data = await send();
